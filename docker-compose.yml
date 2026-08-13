@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: key_server
+      POSTGRES_USER: key_server
+      POSTGRES_PASSWORD: change-me-strong-password
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./server/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    ports:
+      - "5432:5432"
+
+  api:
+    build: ./server
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgres://key_server:change-me-strong-password@db:5432/key_server
+      FRONTEND_ORIGIN: http://localhost:8080
+      ADMIN_USERNAME: admin
+      # Generate with: docker compose run --rm api npm run hash-password -- "your-password"
+      ADMIN_PASSWORD_HASH: "REPLACE_ME"
+      # Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      SERVER_HMAC_SECRET: "REPLACE_ME"
+      SESSION_TTL_MS: 28800000
+    ports:
+      - "4000:4000"
+
+  web:
+    build:
+      context: ./web
+      args:
+        VITE_API_BASE: http://localhost:4000
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  db_data:
